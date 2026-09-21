@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG Pipeline Benchmark</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .benchmark-form {
+            margin-bottom: 2rem;
+        }
+        .results-container {
+            margin-top: 2rem;
+        }
+        .query-card {
+            margin-bottom: 1rem;
+        }
+        .metrics-card {
+            margin-bottom: 2rem;
+        }
+        .score-indicator {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        .score-good {
+            color: #28a745;
+        }
+        .score-medium {
+            color: #ffc107;
+        }
+        .score-poor {
+            color: #dc3545;
+        }
+        .hidden {
+            display: none;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.25rem;
+        }
+        .query-templates {
+            margin-bottom: 1rem;
+        }
+        .source-match {
+            color: #28a745;
+        }
+        .source-no-match {
+            color: #dc3545;
+        }
+        .chart-container {
+            height: 300px;
+            margin-bottom: 2rem;
+        }
+        textarea {
+            font-family: monospace;
+        }
+        .nav {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a.active {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="nav">
+            <a href="/" style="display: inline-block; padding: 8px 16px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">Search</a>
+            <a href="/compare" style="display: inline-block; padding: 8px 16px; background-color: #3498db; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">Compare Retrieval</a>
+            <a href="/benchmark-ui" class="active" style="display: inline-block; padding: 8px 16px; background-color: #2980b9; color: white; text-decoration: none; border-radius: 4px; margin-right: 10px;">Benchmark</a>
+        </div>
+        
+        <h1>France Knowledge RAG Pipeline Benchmark Tool</h1>
+        <p class="lead">Test your France-focused Retrieval-Augmented Generation pipeline against multiple evaluation criteria</p>
+        
+        <div class="alert alert-info">
+            <h5>Evaluation Criteria:</h5>
+            <ul>
+                <li><strong>Accuracy & Relevance</strong> - How accurate and relevant are the generated answers?</li>
+                <li><strong>Faithfulness</strong> - Do responses avoid hallucinations and stay grounded in the retrieved context?</li>
+                <li><strong>Coverage</strong> - How well do retrieved chunks cover the information needed?</li>
+                <li><strong>Response Consistency</strong> - Are responses formatted consistently?</li>
+                <li><strong>Robustness</strong> - How well does the system handle edge cases?</li>
+            </ul>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card benchmark-form">
+                    <div class="card-header">
+                        <h3>Run Benchmark Tests</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="query-templates mb-3">
+                            <label class="form-label">Query Templates:</label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <button class="btn btn-sm btn-outline-primary add-template" data-template="[{&quot;query&quot;: &quot;What are the major rivers in France?&quot;, &quot;expected_answer&quot;: &quot;The major rivers in France include the Seine, Loire, Garonne, and Rhône&quot;}, {&quot;query&quot;: &quot;What is the Paris Basin?&quot;, &quot;expected_answer&quot;: &quot;The Paris Basin is a sedimentary basin that lies between the Ardennes, Vosges, Massif Central, and Massif Armoricain, with alternating beds of limestones, sands, and clays&quot;}, {&quot;query&quot;: &quot;Tell me about the French Riviera&quot;, &quot;expected_answer&quot;: &quot;The French Riviera (Côte d'Azur) is a famous tourist and retirement area where Alpine foothills and ancient massifs reach the Mediterranean, forming coves, capes, and harbors&quot;}]">Geography</button>
+                                <button class="btn btn-sm btn-outline-primary add-template" data-template="[{&quot;query&quot;: &quot;What are the main features of the Loire River?&quot;, &quot;expected_answer&quot;: &quot;The Loire is the longest French river at 634 miles, flows through the Massif Central and Paris Basin, has extremely irregular flow, and its valley is a UNESCO World Heritage site&quot;}, {&quot;query&quot;: &quot;How does the Rhône river system work?&quot;, &quot;expected_answer&quot;: &quot;The Rhône rises in the Alps, passes through Lake Geneva, receives the Saône at Lyon, has a complex flow regime with Alpine tributaries, and forms the Camargue region at its delta&quot;}, {&quot;query&quot;: &quot;Describe the geography of Corsica&quot;, &quot;expected_answer&quot;: &quot;Corsica is an island with peaks over 6,500 feet, parts covered with wild forest or Mediterranean scrub vegetation called maquis&quot;}]">Detailed Geography</button>
+                                <button class="btn btn-sm btn-outline-primary add-template" data-template="[{&quot;query&quot;: &quot;What are the different climate regions of France?&quot;, &quot;expected_answer&quot;: &quot;France has three main climate regions: the oceanic region, the continental region, and the Mediterranean region&quot;}, {&quot;query&quot;: &quot;What makes the Camargue region significant?&quot;, &quot;expected_answer&quot;: &quot;The Camargue is a region at the Rhône delta comprising lakes, marshes, and sand spits that includes one of Europe's important wetland nature reserves&quot;}, {&quot;query&quot;: &quot;How does the Seine River impact Paris?&quot;, &quot;expected_answer&quot;: &quot;The Seine flows through Paris with islands including the Ile de la Cité which forms the heart of the city. The river may flood in spring and during fall-winter peaks, requiring flood control measures.&quot;}]">Climate & Impact</button>
+                                <button class="btn btn-sm btn-outline-primary add-template" data-template="[{&quot;query&quot;: &quot;&quot;, &quot;expected_answer&quot;: &quot;&quot;}, {&quot;query&quot;: &quot;?&quot;, &quot;expected_answer&quot;: &quot;&quot;}, {&quot;query&quot;: &quot;@#$%^&*&quot;, &quot;expected_answer&quot;: &quot;&quot;}]">Edge Cases</button>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="benchmark-queries" class="form-label">Test Queries (JSON format):</label>
+                            <textarea class="form-control" id="benchmark-queries" rows="10" placeholder='[
+  {
+    "query": "What is the Seine river system?",
+    "expected_answer": "The Seine is the main river of the Paris Basin, 485 miles long, with tributaries including the Yonne, Marne, and Oise. It has a regular flow but may flood in spring, and it enters the English Channel at Le Havre."
+  },
+  {
+    "query": "Describe the Aquitaine Basin",
+    "expected_answer": "The Aquitaine Basin is a smaller basin in southwestern France bounded by the Pyrenees and the Massif Central. It has limestone plateaus in the north, and its southern area was filled with sand and gravel from the Pyrenees."
+  },
+  {
+    "query": "What are the geographic features of the French Mediterranean coast?",
+    "expected_answer": "The French Mediterranean coast includes the Camargue region with lakes and marshes, the Languedoc coastal plain, and the Côte d'Azur (French Riviera) where Alpine foothills reach the Mediterranean forming coves and harbors."
+  }
+]'></textarea>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="top-k" class="form-label">Top K Results:</label>
+                                <input type="number" class="form-control" id="top-k" value="5" min="1" max="20">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="category-filter" class="form-label">Category Filter (optional):</label>
+                                <input type="text" class="form-control" id="category-filter" placeholder="e.g., technology">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="max-tokens" class="form-label">Max Tokens:</label>
+                                <input type="number" class="form-control" id="max-tokens" value="500" min="50" max="2000">
+                            </div>
+                        </div>
+                        <button id="run-benchmark" class="btn btn-primary">Run Benchmark</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="results-container hidden" id="results-section">
+            <h2>Benchmark Results</h2>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card metrics-card">
+                        <div class="card-header">
+                            <h3>Overall Performance</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="text-center mb-4">
+                                <div class="score-indicator" id="performance-score">0%</div>
+                                <div class="progress">
+                                    <div class="progress-bar" id="performance-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                            
+                            <h5>Retrieval Metrics</h5>
+                            <ul class="list-group list-group-flush mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Avg. Chunks Retrieved
+                                    <span class="badge bg-primary rounded-pill" id="avg-chunks"></span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Avg. Similarity Score
+                                    <span class="badge bg-primary rounded-pill" id="avg-similarity"></span>
+                                </li>
+                            </ul>
+                            
+                            <h5>Generation Metrics</h5>
+                            <ul class="list-group list-group-flush mb-3">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Avg. Response Length
+                                    <span class="badge bg-success rounded-pill" id="avg-length"></span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Avg. Generation Time
+                                    <span class="badge bg-success rounded-pill" id="avg-time"></span>
+                                </li>
+                            </ul>
+                            
+                            <h5>Robustness Metrics</h5>
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Error Rate
+                                    <span class="badge bg-danger rounded-pill" id="error-rate"></span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    Empty Results Rate
+                                    <span class="badge bg-warning rounded-pill" id="empty-rate"></span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Results Visualization</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="chart-container">
+                                <canvas id="metrics-chart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="response-times-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>Individual Query Results</h3>
+            <div id="query-results"></div>
+            
+            <div class="mt-4 mb-5">
+                <button class="btn btn-secondary" id="export-results">Export Results as JSON</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="text-center my-5 hidden">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Running benchmark tests...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const runBenchmarkBtn = document.getElementById('run-benchmark');
+            const exportResultsBtn = document.getElementById('export-results');
+            const resultsSection = document.getElementById('results-section');
+            const queryResults = document.getElementById('query-results');
+            const loadingIndicator = document.getElementById('loading');
+            let benchmarkData = null;
+            
+            // Add template buttons
+            document.querySelectorAll('.add-template').forEach(button => {
+                button.addEventListener('click', function() {
+                    try {
+                        const templateData = JSON.parse(this.getAttribute('data-template').replace(/\\'/g, "'"));
+                        const currentInput = document.getElementById('benchmark-queries').value.trim();
+                        
+                        if (currentInput) {
+                            try {
+                                // Try to parse current input as JSON
+                                const currentQueries = JSON.parse(currentInput);
+                                // Merge with template
+                                const mergedQueries = [...currentQueries, ...templateData];
+                                document.getElementById('benchmark-queries').value = JSON.stringify(mergedQueries, null, 2);
+                            } catch (e) {
+                                console.error("Error parsing existing queries:", e);
+                                // If current input is not valid JSON, replace with template
+                                document.getElementById('benchmark-queries').value = JSON.stringify(templateData, null, 2);
+                            }
+                        } else {
+                            // If empty, use template
+                            document.getElementById('benchmark-queries').value = JSON.stringify(templateData, null, 2);
+                        }
+                    } catch (e) {
+                        console.error("Error processing template:", e);
+                        alert("Error processing template: " + e.message);
+                    }
+                });
+            });
+            
+            runBenchmarkBtn.addEventListener('click', async function() {
+                try {
+                    // Get input values
+                    const queriesInput = document.getElementById('benchmark-queries').value;
+                    const queries = JSON.parse(queriesInput);
+                    const topK = parseInt(document.getElementById('top-k').value);
+                    const categoryFilter = document.getElementById('category-filter').value;
+                    const maxTokens = parseInt(document.getElementById('max-tokens').value);
+                    
+                    // Validate
+                    if (!Array.isArray(queries) || queries.length === 0) {
+                        alert("Please enter valid queries in JSON format");
+                        return;
+                    }
+                    
+                    // Show loading indicator
+                    loadingIndicator.classList.remove('hidden');
+                    resultsSection.classList.add('hidden');
+                    
+                    // Call benchmark endpoint
+                    const response = await fetch('/benchmark', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            queries: queries,
+                            top_k: topK,
+                            category_filter: categoryFilter || undefined,
+                            max_tokens: maxTokens
+                        }),
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+                    
+                    benchmarkData = await response.json();
+                    
+                    // Update UI with results
+                    displayResults(benchmarkData);
+                    
+                } catch (error) {
+                    console.error("Benchmark error:", error);
+                    alert(`Error running benchmark: ${error.message}`);
+                } finally {
+                    // Hide loading indicator
+                    loadingIndicator.classList.add('hidden');
+                }
+            });
+            
+            exportResultsBtn.addEventListener('click', function() {
+                if (!benchmarkData) return;
+                
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(benchmarkData, null, 2));
+                const downloadAnchorNode = document.createElement('a');
+                downloadAnchorNode.setAttribute("href", dataStr);
+                downloadAnchorNode.setAttribute("download", "benchmark_results.json");
+                document.body.appendChild(downloadAnchorNode);
+                downloadAnchorNode.click();
+                downloadAnchorNode.remove();
+            });
+            
+            function displayResults(data) {
+                // Show results section
+                resultsSection.classList.remove('hidden');
+                
+                // Update performance score
+                const performanceScore = data.performance_score;
+                document.getElementById('performance-score').textContent = `${performanceScore}%`;
+                document.getElementById('performance-bar').style.width = `${performanceScore}%`;
+                document.getElementById('performance-bar').setAttribute('aria-valuenow', performanceScore);
+                
+                // Set color based on score
+                const scoreElement = document.getElementById('performance-score');
+                scoreElement.className = 'score-indicator';
+                if (performanceScore >= 80) {
+                    scoreElement.classList.add('score-good');
+                    document.getElementById('performance-bar').classList.add('bg-success');
+                } else if (performanceScore >= 60) {
+                    scoreElement.classList.add('score-medium');
+                    document.getElementById('performance-bar').classList.add('bg-warning');
+                } else {
+                    scoreElement.classList.add('score-poor');
+                    document.getElementById('performance-bar').classList.add('bg-danger');
+                }
+                
+                // Update metrics
+                const metrics = data.metrics;
+                document.getElementById('avg-chunks').textContent = metrics.retrieval_metrics.avg_chunks_retrieved;
+                document.getElementById('avg-similarity').textContent = metrics.retrieval_metrics.avg_similarity_score;
+                document.getElementById('avg-length').textContent = metrics.generation_metrics.avg_response_length;
+                document.getElementById('avg-time').textContent = `${metrics.generation_metrics.avg_generation_time}s`;
+                document.getElementById('error-rate').textContent = `${metrics.robustness_metrics.error_rate * 100}%`;
+                document.getElementById('empty-rate').textContent = `${metrics.robustness_metrics.empty_results_rate * 100}%`;
+                
+                // Display individual query results
+                queryResults.innerHTML = '';
+                data.benchmark_results.forEach((result, index) => {
+                    const hasError = result.error !== undefined;
+                    
+                    const card = document.createElement('div');
+                    card.className = `card query-card ${hasError ? 'border-danger' : ''}`;
+                    
+                    const header = document.createElement('div');
+                    header.className = `card-header ${hasError ? 'bg-danger text-white' : ''}`;
+                    header.innerHTML = `<h5>Query ${index + 1}: ${result.query}</h5>`;
+                    
+                    const body = document.createElement('div');
+                    body.className = 'card-body';
+                    
+                    if (hasError) {
+                        body.innerHTML = `
+                            <div class="alert alert-danger">
+                                <strong>Error:</strong> ${result.error}
+                            </div>
+                            ${result.traceback ? `<pre>${result.traceback}</pre>` : ''}
+                        `;
+                    } else {
+                        let relevanceHtml = '';
+                        if (result.relevance_score !== undefined) {
+                            const relevanceClass = result.relevance_score >= 0.7 ? 'text-success' : 
+                                                  result.relevance_score >= 0.4 ? 'text-warning' : 'text-danger';
+                            relevanceHtml = `
+                                <div class="mb-3">
+                                    <strong>Relevance Score:</strong> 
+                                    <span class="${relevanceClass}">${(result.relevance_score * 100).toFixed(1)}%</span>
+                                </div>
+                            `;
+                        }
+                        
+                        let sourceHtml = '';
+                        if (result.sources && result.sources.length > 0) {
+                            sourceHtml = `
+                                <div class="mt-3">
+                                    <strong>Sources (${result.retrieved_chunks}):</strong>
+                                    <ul class="list-group">
+                                        ${result.sources.map(source => `
+                                            <li class="list-group-item small">${source}</li>
+                                        `).join('')}
+                                    </ul>
+                                </div>
+                            `;
+                        }
+                        
+                        let metricsHtml = `
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <strong>Generation Time:</strong> ${result.generation_time}s
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Avg. Similarity:</strong> ${result.avg_similarity_score}
+                                </div>
+                            </div>
+                        `;
+                        
+                        body.innerHTML = `
+                            <div class="response-text">
+                                <strong>Response:</strong>
+                                <div class="border p-3 rounded bg-light mt-2 mb-3">${result.response}</div>
+                            </div>
+                            ${relevanceHtml}
+                            ${metricsHtml}
+                            ${sourceHtml}
+                        `;
+                    }
+                    
+                    card.appendChild(header);
+                    card.appendChild(body);
+                    queryResults.appendChild(card);
+                });
+                
+                // Create charts
+                createMetricsChart(data);
+                createResponseTimesChart(data);
+            }
+            
+            function createMetricsChart(data) {
+                const ctx = document.getElementById('metrics-chart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.metricsChart) {
+                    window.metricsChart.destroy();
+                }
+                
+                const metrics = data.metrics;
+                
+                window.metricsChart = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: [
+                            'Retrieval Performance', 
+                            'Response Quality',
+                            'Error Handling',
+                            'Relevance',
+                            'Processing Speed'
+                        ],
+                        datasets: [{
+                            label: 'Performance Metrics',
+                            data: [
+                                metrics.retrieval_metrics.avg_similarity_score * 100,
+                                (1 - metrics.robustness_metrics.empty_results_rate) * 100,
+                                (1 - metrics.robustness_metrics.error_rate) * 100,
+                                data.performance_score,
+                                Math.max(0, 100 - metrics.generation_metrics.avg_generation_time * 10) // Scale time score
+                            ],
+                            fill: true,
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            borderColor: 'rgb(54, 162, 235)',
+                            pointBackgroundColor: 'rgb(54, 162, 235)',
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff',
+                            pointHoverBorderColor: 'rgb(54, 162, 235)'
+                        }]
+                    },
+                    options: {
+                        scales: {
+                            r: {
+                                angleLines: {
+                                    display: true
+                                },
+                                suggestedMin: 0,
+                                suggestedMax: 100
+                            }
+                        }
+                    }
+                });
+            }
+            
+            function createResponseTimesChart(data) {
+                const ctx = document.getElementById('response-times-chart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.responseTimesChart) {
+                    window.responseTimesChart.destroy();
+                }
+                
+                const results = data.benchmark_results.filter(r => !r.error);
+                
+                window.responseTimesChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: results.map((_, i) => `Query ${i+1}`),
+                        datasets: [{
+                            label: 'Generation Time (s)',
+                            data: results.map(r => r.generation_time),
+                            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                            borderColor: 'rgb(75, 192, 192)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Response Generation Times'
+                            },
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Time (seconds)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-        .source {
+            background-color: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .source:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        .source-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+            font-size: 1.1rem;
+        }
+        .source-info {
+            font-size: 14px;
+            color: #6c757d;
+            margin-top: 10px;
+        }
+        .highlight {
+            background-color: #ffffcc;
+            padding: 0 2px;
+        }ale=1.0">
+    <title>France RAG Search</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+        }
+        .nav {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a.active {
+            background-color: #2980b9;
+        }
+        .nav a:hover {
+            background-color: #2980b9;
+        }
+        .search-options {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 12px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            gap: 10px;
+        }
+        .search-options label {
+            margin-right: 8px;
+            font-weight: 500;
+        }
+        .search-options select {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: white;
+            min-width: 120px;
+        }
+        .option-group {
+            display: flex;
+            align-items: center;
+            margin-right: 15px;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .search-container {
+            display: flex;
+            margin-bottom: 20px;
+        }
+        .nav {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a.active {
+            background-color: #2980b9;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px 0 0 4px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px 24px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .loading {
+            text-align: center;
+            margin: 20px 0;
+            display: none;
+        }
+        .results {
+            display: none;
+        }
+        .benchmark-form {
+            margin-bottom: 2rem;
+        }
+        .sources {
+            display: none;
+        }
+        .source {
+            background-color: #fff;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+        .source-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .source-info {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .nav {
+            margin-bottom: 20px;
+        }
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .nav a:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="nav">
+            <a href="/" class="active">Search</a>
+            <a href="/compare">Compare Retrieval</a>
+            <a href="/benchmark-ui">Benchmark</a>
+        </div>
+
+        <h1>France Knowledge RAG Pipeline</h1>
+        <p class="lead">Ask questions about France's geography, culture, history and more</p>
+    
+        <div class="card benchmark-form">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Ask a Question</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="text" id="query" placeholder="Ask a question about France..." class="form-control">
+                        <button id="search-button" class="btn btn-primary">
+                            <i class="bi bi-search me-1"></i> Search
+                        </button>
+                    </div>
+                </div>
+    
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="response-length" class="form-label">Response Length:</label>
+                            <select id="response-length" class="form-select">
+                                <option value="150">Very Concise</option>
+                                <option value="300" selected>Concise</option>
+                                <option value="500">Detailed</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="top-k" class="form-label">Sources to retrieve:</label>
+                            <select id="top-k" class="form-select">
+                                <option value="3">Few (3)</option>
+                                <option value="5" selected>Standard (5)</option>
+                                <option value="8">Many (8)</option>
+                                <option value="12">Extensive (12)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+    
+            </div>
+        </div>
+    
+        <div class="loading text-center my-4">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Searching for information...</p>
+        </div>
+    
+        <div class="alert alert-danger" id="error-message" role="alert" style="display: none;"></div>
+    
+        <div class="results">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 style="color:#ffffff;" class="mb-0">Answer</h3>
+                </div>
+                <div class="card-body" id="answer"></div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h3 class="mb-0">Sources</h3>
+                    <button class="btn btn-sm btn-outline-primary" onclick="toggleSources()">Toggle Sources</button>
+                </div>
+                <div class="card-body sources" id="sources" style="display: none;"></div>
+            </div>
+        </div>
+
+    <script>
+        const searchButton = document.getElementById('search-button');
+        const queryInput = document.getElementById('query');
+        const loadingDiv = document.querySelector('.loading');
+        const resultsDiv = document.querySelector('.results');
+        const answerDiv = document.getElementById('answer');
+        const sourcesDiv = document.getElementById('sources');
+        const errorDiv = document.getElementById('error-message');
+        
+        searchButton.addEventListener('click', performSearch);
+        queryInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performSearch();
+            }
+        });
+        
+        function toggleSources() {
+            const sourcesDiv = document.getElementById('sources');
+            const currentDisplay = sourcesDiv.style.display;
+            sourcesDiv.style.display = currentDisplay === 'block' ? 'none' : 'block';
+            
+            const toggleBtn = document.querySelector('.card-header .btn');
+            toggleBtn.textContent = currentDisplay === 'block' ? 'Show Sources' : 'Hide Sources';
+        }
+        
+        async function performSearch() {
+            const query = queryInput.value.trim();
+            
+            if (!query) {
+                return;
+            }
+            
+            // Show loading, hide results and errors
+            loadingDiv.style.display = 'block';
+            resultsDiv.style.display = 'none';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const maxTokens = parseInt(document.getElementById('response-length').value);
+                const topK = parseInt(document.getElementById('top-k').value);
+                
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        top_k: topK,
+                        max_tokens: maxTokens
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Server responded with status ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                // Display the response with source count
+                const sourceInfo = data.retrieved_chunks > 0 ? 
+                    `<div class="alert alert-info mt-3"><i class="bi bi-info-circle me-2"></i>Based on ${data.retrieved_chunks} information source${data.retrieved_chunks > 1 ? 's' : ''}</div>` : '';
+                answerDiv.innerHTML = `<div class="mb-3">${data.response.replace(/\n/g, '<br>')}</div>${sourceInfo}`;
+                
+                // Display sources
+                sourcesDiv.innerHTML = '';
+                if (data.retrieved_chunks > 0) {
+                    // Fetch more details about the chunks
+                    const retrieveResponse = await fetch('/retrieve', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            query: query,
+                            top_k: topK
+                        })
+                    });
+                    
+                    if (retrieveResponse.ok) {
+                        const retrieveData = await retrieveResponse.json();
+                        
+                        retrieveData.results.forEach(result => {
+                            const sourceElement = document.createElement('div');
+                            sourceElement.className = 'source';
+                            sourceElement.innerHTML = `
+                                <div class="source-title">${result.title} - ${result.category}</div>
+                                <div class="badge bg-primary mb-2">Relevance: ${result.hybrid_score ? result.hybrid_score.toFixed(4) : (result.similarity_score ? result.similarity_score.toFixed(4) : 'N/A')}</div>
+                                <p>${highlightQueryTerms(result.text, query)}</p>
+                            `;
+                            sourcesDiv.appendChild(sourceElement);
+                        });
+                    }
+                } else {
+                    sourcesDiv.innerHTML = '<div class="alert alert-warning">No sources retrieved.</div>';
+                }
+                
+                // Show results, hide loading
+                loadingDiv.style.display = 'none';
+                resultsDiv.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = `Error: ${error.message}`;
+                errorDiv.style.display = 'block';
+                loadingDiv.style.display = 'none';
+            }
+        }
+        
+        function highlightQueryTerms(text, query) {
+            const terms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+            let result = text;
+            
+            for (const term of terms) {
+                const regex = new RegExp(`(${term})`, 'gi');
+                result = result.replace(regex, '<span class="highlight">$1</span>');
+            }
+            
+            return result;
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
