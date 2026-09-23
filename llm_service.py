@@ -53,7 +53,7 @@ class LLMService:
 
         errors = []
 
-        # 1. Primary: Try modern google-genai SDK with dynamic model discovery
+        # 1. Primary: Try modern google-genai SDK
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
@@ -62,8 +62,9 @@ class LLMService:
             try:
                 for m in client.models.list():
                     name = getattr(m, "name", "") or str(m)
-                    clean_name = name.replace("models/", "")
-                    if "gemini" in clean_name and "embed" not in clean_name and "imagen" not in clean_name:
+                    clean_name = name.replace("models/", "").lower()
+                    # Exclude non-text models (embeddings, imagen, tts, audio)
+                    if "gemini" in clean_name and not any(bad in clean_name for bad in ["embed", "imagen", "tts", "audio"]):
                         available_models.append(clean_name)
             except Exception as list_err:
                 errors.append(f"genai_list: {str(list_err)}")
@@ -86,15 +87,15 @@ class LLMService:
                     err_msg = str(inner_e)
                     errors.append(f"genai({m}): {err_msg}")
                     err_text = err_msg.lower()
-                    if "404" in err_text or "not found" in err_text:
+                    if any(k in err_text for k in ["404", "not found", "modalities", "audio", "tts", "invalid_argument"]):
                         continue
-                    if "api_key" in err_text or "unauthenticated" in err_text or "invalid" in err_text or "blocked" in err_text:
+                    if "api_key_invalid" in err_text or "unauthenticated" in err_text:
                         return f"API Key Error: {err_msg}"
-                    break
+                    continue
         except Exception as e1:
             errors.append(f"genai_init: {str(e1)}")
 
-        # 2. Backup: Try legacy google-generativeai SDK with dynamic model discovery
+        # 2. Backup: Try legacy google-generativeai SDK
         try:
             import google.generativeai as legacy_genai
             legacy_genai.configure(api_key=api_key)
@@ -103,8 +104,8 @@ class LLMService:
             try:
                 for m in legacy_genai.list_models():
                     if hasattr(m, "supported_generation_methods") and "generateContent" in m.supported_generation_methods:
-                        c_name = m.name.replace("models/", "")
-                        if "embed" not in c_name and "imagen" not in c_name and "pro-001" not in c_name:
+                        c_name = m.name.replace("models/", "").lower()
+                        if not any(bad in c_name for bad in ["embed", "imagen", "tts", "audio", "pro-001"]):
                             legacy_available.append(c_name)
             except Exception as legacy_list_err:
                 errors.append(f"legacy_list: {str(legacy_list_err)}")
@@ -129,7 +130,7 @@ class LLMService:
 
         if errors:
             for err in reversed(errors):
-                if "api_key" in err.lower() or "invalid" in err.lower() or "unauthenticated" in err.lower():
+                if "api_key_invalid" in err.lower() or "unauthenticated" in err.lower():
                     return f"API Key Error: {err}"
             return f"AI service error: {errors[-1]}"
 
