@@ -1,240 +1,175 @@
-"""
-🔥 Agentic AI Assistant - Modern UI
-RAG + General LLM Hybrid System
-"""
-
-import os
-import sys
 import time
 import streamlit as st
-
-# Path setup
-src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "src"))
-if src_path not in sys.path:
-    sys.path.append(src_path)
-
+from retrieval import VectorRetriever, extract_text_from_file
 from pipeline import run_pipeline
-from retrieval import VectorRetriever, clean_text
 from llm_service import LLMService
 
-try:
-    from PyPDF2 import PdfReader
-    PDF_SUPPORT = True
-except:
-    PDF_SUPPORT = False
+# ------------------------------------
+# 1. PAGE CONFIG & DARK MODERN THEME
+# ------------------------------------
+st.set_page_config(
+    page_title="Agentic AI Assistant",
+    page_icon="🤖",
+    layout="wide"
+)
 
-# -----------------------
-# PAGE CONFIG
-# -----------------------
-st.set_page_config(page_title="Agentic AI", page_icon="🤖", layout="wide")
-
-# -----------------------
-# 🎨 MODERN CSS
-# -----------------------
 st.markdown("""
 <style>
+    /* Dark Modern Base Styles */
+    .stApp {
+        background-color: #0d1117;
+        color: #c9d1d9;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    /* Header Styling */
+    .main-title {
+        text-align: center;
+        font-size: 2.6rem;
+        font-weight: 800;
+        color: #58a6ff;
+        margin-top: 10px;
+        margin-bottom: 5px;
+    }
+    
+    .subtitle {
+        text-align: center;
+        font-size: 1.1rem;
+        color: #8b949e;
+        margin-bottom: 30px;
+    }
 
-/* Background */
-.stApp {
-    background: linear-gradient(135deg, #0f172a, #020617);
-    color: white;
-}
+    /* Metric Card Styling */
+    .metric-card {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .metric-label {
+        font-size: 0.85rem;
+        color: #8b949e;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 5px;
+    }
+    .metric-value {
+        font-size: 1.4rem;
+        font-weight: 700;
+    }
 
-/* Header */
-.title {
-    font-size: 2.8rem;
-    font-weight: 800;
-    text-align: center;
-    margin-bottom: 5px;
-}
-.subtitle {
-    text-align: center;
-    color: #94a3b8;
-    margin-bottom: 20px;
-}
-
-/* Cards */
-.card {
-    background: rgba(255,255,255,0.05);
-    padding: 18px;
-    border-radius: 15px;
-    text-align: center;
-    border: 1px solid rgba(255,255,255,0.1);
-}
-
-/* Answer Box */
-.answer {
-    background: rgba(16,185,129,0.1);
-    padding: 20px;
-    border-radius: 12px;
-    font-size: 1.2rem;
-    margin-top: 10px;
-}
-
-/* Input */
-input {
-    border-radius: 10px !important;
-}
-
-/* Buttons */
-.stButton>button {
-    background: linear-gradient(90deg,#6366f1,#06b6d4);
-    color: white;
-    border-radius: 10px;
-    padding: 10px 20px;
-    font-weight: bold;
-}
-
-/* Mode Colors */
-.rag {color:#22c55e;font-weight:bold;}
-.fallback {color:#facc15;font-weight:bold;}
-.llm {color:#38bdf8;font-weight:bold;}
-
+    /* Answer Container */
+    .answer-box {
+        background: #161b22;
+        border: 1px solid #30363d;
+        border-left: 4px solid #58a6ff;
+        border-radius: 8px;
+        padding: 20px;
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: #e6edf3;
+        margin-top: 15px;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-
-# -----------------------
-# LOAD SERVICES
-# -----------------------
+# ------------------------------------
+# 2. INITIALIZE SERVICES & STATE
+# ------------------------------------
 @st.cache_resource
-def load_services():
-    r = VectorRetriever()
-    r.load_chunks()
-    r.generate_embeddings()
-    l = LLMService(provider="gemini")
-    return r, l
+def get_llm_service():
+    return LLMService()
 
-retriever, llm_service = load_services()
+llm_service = get_llm_service()
 
+if "retriever" not in st.session_state:
+    st.session_state.retriever = VectorRetriever()
 
-# -----------------------
-# CHUNK HELPER
-# -----------------------
-def split_chunks(text, size=300):
-    words = text.split()
-    return [
-        " ".join(words[i:i+size])
-        for i in range(0, len(words), size)
-        if len(" ".join(words[i:i+size])) > 50
-    ]
+retriever = st.session_state.retriever
 
-
-# -----------------------
-# 📄 SIDEBAR UPLOAD
-# -----------------------
+# ------------------------------------
+# 3. SIDEBAR (FILE UPLOAD & CHUNKS)
+# ------------------------------------
 with st.sidebar:
-    st.title("📄 Upload Document")
+    st.title("📂 Document Upload")
+    uploaded_file = st.file_uploader("Upload PDF or TXT file", type=["pdf", "txt"])
 
-    file = st.file_uploader("Upload PDF / TXT", type=["pdf","txt"])
-
-    if file:
-        try:
-            text = ""
-
-            if file.type == "application/pdf" and PDF_SUPPORT:
-                reader = PdfReader(file)
-                for p in reader.pages:
-                    t = p.extract_text()
-                    if t:
-                        text += t
-
-            elif file.type == "text/plain":
-                text = file.read().decode("utf-8")
-
-            cleaned = clean_text(text)
-            chunks = split_chunks(cleaned)
-
-            count = 0
-            for c in chunks:
-                retriever.chunks.append({
-                    "chunk_id": f"upload_{time.time()}_{count}",
-                    "text": c,
-                    "source_url": file.name
-                })
-                count += 1
-
-            if count > 0:
-                retriever.generate_embeddings(force_regenerate=True)
-                st.success(f"✅ {count} chunks added!")
-            else:
-                st.warning("No useful content found")
-
-        except Exception as e:
-            st.error(str(e))
+    if uploaded_file is not None:
+        file_key = f"{uploaded_file.name}_{uploaded_file.size}"
+        if st.session_state.get("last_uploaded_file") != file_key:
+            with st.spinner("Extracting text and generating embeddings..."):
+                raw_text = extract_text_from_file(uploaded_file)
+                if raw_text.strip():
+                    num_chunks = retriever.add_document(raw_text)
+                    st.session_state.last_uploaded_file = file_key
+                    st.success(f"Successfully processed {num_chunks} chunks!")
+                else:
+                    st.error("Could not extract readable text from the document.")
 
     st.markdown("---")
-    st.caption(f"Chunks: {len(retriever.chunks)}")
+    st.metric(label="Total Document Chunks", value=len(retriever.chunks))
 
+# ------------------------------------
+# 4. MAIN UI CONTENT
+# ------------------------------------
+st.markdown('<h1 class="main-title">Agentic AI Assistant</h1>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">RAG + Smart AI Fallback System</p>', unsafe_allow_html=True)
 
-# -----------------------
-# HEADER
-# -----------------------
-st.markdown('<div class="title">🤖 Agentic AI Assistant</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">RAG + Smart AI Fallback System</div>', unsafe_allow_html=True)
+query_input = st.text_input("Ask your question...", placeholder="Type your query here...")
+ask_button = st.button("Ask", type="primary")
 
-st.info("📌 Upload documents OR ask anything — system will decide automatically.")
+if ask_button and query_input:
+    start_time = time.time()
+    
+    with st.spinner("Thinking..."):
+        result = run_pipeline(
+            query=query_input,
+            retriever=retriever,
+            llm_service=llm_service
+        )
+    
+    elapsed_time = time.time() - start_time
 
-# -----------------------
-# INPUT
-# -----------------------
-query = st.text_input("Ask your question...")
+    mode = result.get("mode", "🔵 LLM")
+    score = result.get("score", 0.0)
+    answer = result.get("answer", "")
+    retrieved_chunks = result.get("retrieved_chunks", [])
 
-if st.button("🚀 Ask") and query:
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Mode</div>
+            <div class="metric-value">{mode}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Similarity Score</div>
+            <div class="metric-value">{score:.2f}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Response Time</div>
+            <div class="metric-value">{elapsed_time:.2f}s</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    start = time.time()
+    st.markdown("### Answer")
+    st.markdown(f'<div class="answer-box">{answer}</div>', unsafe_allow_html=True)
 
-    result = run_pipeline(query, retriever, llm_service)
-
-    elapsed = time.time() - start
-
-    mode = result.get("mode")
-    score = result.get("score",0)
-    answer = result.get("answer","")
-    chunks = result.get("retrieved_chunks",[])
-
-    # -----------------------
-    # MODE UI
-    # -----------------------
-    if mode == "RAG":
-        mode_label = '<span class="rag">🟢 RAG (Document)</span>'
-        explanation = "Answer from document context"
-        show_context = True
-    elif "Fallback" in mode:
-        mode_label = '<span class="fallback">🟡 RAG → LLM (Fallback)</span>'
-        explanation = "No strong match → General AI used"
-        show_context = False
-    else:
-        mode_label = '<span class="llm">🔵 General LLM</span>'
-        explanation = "Pure AI response"
-        show_context = False
-
-    # -----------------------
-    # METRICS
-    # -----------------------
-    c1,c2,c3 = st.columns(3)
-
-    with c1:
-        st.markdown(f"<div class='card'>Mode<br>{mode_label}</div>", unsafe_allow_html=True)
-
-    with c2:
-        st.markdown(f"<div class='card'>Score<br>{score:.2f}</div>", unsafe_allow_html=True)
-
-    with c3:
-        st.markdown(f"<div class='card'>Time<br>{elapsed:.2f}s</div>", unsafe_allow_html=True)
-
-    st.markdown(f"<div style='margin-top:10px;color:#94a3b8'>{explanation}</div>", unsafe_allow_html=True)
-
-    # -----------------------
-    # ANSWER
-    # -----------------------
-    st.subheader("💡 Answer")
-    st.markdown(f"<div class='answer'>{answer}</div>", unsafe_allow_html=True)
-
-    # -----------------------
-    # CONTEXT
-    # -----------------------
-    if show_context and chunks:
+    if mode == "🟢 RAG" and retrieved_chunks:
         with st.expander("🔍 Retrieved Context"):
-            for c in chunks:
-                st.write(c["text"])
+            for i, chunk in enumerate(retrieved_chunks, 1):
+                st.markdown(f"**Chunk {i} (Score: {chunk['score']:.2f})**")
+                st.write(chunk["text"])
+                st.markdown("---")
