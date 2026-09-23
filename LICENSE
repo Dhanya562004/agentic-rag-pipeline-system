@@ -1,10 +1,6 @@
 MIT License
 
-<<<<<<< HEAD
 Copyright (c) 2026 Dhanya k
-=======
-Copyright (c) 2025 Abolfazl Ranjbar
->>>>>>> 5526235 (Upgrade RAG project into modular Agentic AI System with Pipeline, Agent, Evaluator, Logger, and /ask endpoint)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
