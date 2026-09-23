@@ -7,9 +7,10 @@ class LLMService:
     def _get_api_key(self) -> str | None:
         try:
             if "GOOGLE_API_KEY" in st.secrets:
-                key = st.secrets["GOOGLE_API_KEY"]
-                if key and str(key).strip():
-                    return str(key).strip()
+                raw_key = str(st.secrets["GOOGLE_API_KEY"])
+                key = raw_key.strip().strip('"').strip("'")
+                if key:
+                    return key
         except Exception:
             pass
         return None
@@ -56,7 +57,7 @@ class LLMService:
         except Exception as e1:
             last_error = str(e1)
 
-        # 2. Fallback: Try legacy google-generativeai SDK
+        # 2. Backup: Try legacy google-generativeai SDK
         try:
             import google.generativeai as legacy_genai
             legacy_genai.configure(api_key=api_key)
