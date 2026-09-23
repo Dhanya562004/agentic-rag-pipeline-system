@@ -1,56 +1,85 @@
 """
 Evaluation Layer Module
-Basic confidence scoring and relevance check without using external models.
+Evaluates confidence score and relevance for responses.
+Calculates confidence based on retrieval similarity score (< 0.5 threshold) and answer metrics.
 """
 
-def evaluate_response(query: str, answer: str, mode: str, retrieved_chunks: list = None) -> dict:
+def confidence_evaluator(
+    query: str, 
+    answer: str, 
+    mode: str, 
+    retrieved_chunks: list = None,
+    top_score: float = 0.0
+) -> dict:
     """
-    Evaluate response quality and assign confidence score (High / Medium / Low).
+    Evaluates response quality and assigns confidence score (High / Medium / Low)
+    along with a numerical confidence rating (0.0 to 1.0).
     
     Args:
-        query: Original user query
-        answer: Generated LLM response
-        mode: Pipeline execution mode ('rag' or 'general')
-        retrieved_chunks: Chunks retrieved during RAG phase
+        query: User prompt
+        answer: Generated text answer
+        mode: Mode used ('rag', 'general', or fallback)
+        retrieved_chunks: List of document chunks retrieved
+        top_score: Highest similarity score from vector search
         
     Returns:
-        Dict containing confidence rating and relevance score
+        dict: {"confidence": "High"|"Medium"|"Low", "score": float}
     """
-    # Guard clause for empty or error responses
-    if not answer or answer.strip() == "" or "Error" in answer or "No relevant" in answer:
+    # Guard clause for empty or invalid answers
+    if not answer or not str(answer).strip() or "Error" in str(answer):
         return {
             "confidence": "Low",
-            "relevance_score": 0.0
+            "score": 0.0
         }
-    
-    # Calculate simple word overlap between query and answer (excluding common stop words)
-    stop_words = {"what", "is", "the", "a", "an", "of", "in", "and", "to", "for", "where", "how", "who", "which", "tell", "me", "about"}
-    query_words = set(query.lower().split()) - stop_words
-    answer_words = set(answer.lower().split()) - stop_words
-    
-    if not query_words:
-        overlap_ratio = 1.0
-    else:
-        overlap = query_words.intersection(answer_words)
-        overlap_ratio = len(overlap) / len(query_words)
+        
+    invalid_phrases = ["no relevant document found", "i don't have information", "no context found"]
+    if any(phrase in str(answer).lower() for phrase in invalid_phrases):
+        return {
+            "confidence": "Low",
+            "score": round(top_score, 2)
+        }
 
-    # Determine confidence score based on retrieval status, word count, and overlap
-    if mode == "rag":
-        has_retrieval = bool(retrieved_chunks and len(retrieved_chunks) > 0)
-        if has_retrieval and (overlap_ratio > 0.25 or len(answer.split()) > 10):
+    # Evaluate based on mode and top similarity score
+    if "rag" in mode.lower() and "fallback" not in mode.lower():
+        num_chunks = len(retrieved_chunks) if retrieved_chunks else 0
+        
+        # Threshold rule: < 0.5 or 0 chunks triggers LOW confidence
+        if num_chunks == 0 or top_score < 0.5:
+            confidence = "Low"
+            score = round(top_score, 2)
+        elif top_score >= 0.7:
             confidence = "High"
-        elif has_retrieval:
+            score = round(top_score, 2)
+        else:
             confidence = "Medium"
-        else:
-            confidence = "Low"
+            score = round(top_score, 2)
     else:
-        # General LLM mode confidence heuristic
-        if len(answer.split()) >= 8:
-            confidence = "High" if overlap_ratio > 0.2 else "Medium"
+        # General LLM or Fallback mode evaluation
+        word_count = len(str(answer).split())
+        if word_count >= 15:
+            confidence = "High"
+            score = 0.85
+        elif word_count >= 5:
+            confidence = "Medium"
+            score = 0.65
         else:
             confidence = "Low"
-            
+            score = 0.40
+
     return {
         "confidence": confidence,
-        "relevance_score": round(overlap_ratio, 2)
+        "score": score
     }
+
+def evaluate_response(query: str, answer: str, mode: str, retrieved_chunks: list = None, top_score: float = 0.0) -> dict:
+    """
+    Alias for confidence_evaluator() for backward compatibility.
+    """
+    return confidence_evaluator(
+        query=query, 
+        answer=answer, 
+        mode=mode, 
+        retrieved_chunks=retrieved_chunks, 
+        top_score=top_score
+    )
+

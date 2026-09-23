@@ -6,7 +6,13 @@ Handles embedding generation and vector similarity search using sentence-transfo
 import numpy as np
 import json
 from typing import List, Dict, Any, Optional
-from sentence_transformers import SentenceTransformer
+try:
+    from sentence_transformers import SentenceTransformer
+    SENTENCE_TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    SentenceTransformer = None
+    SENTENCE_TRANSFORMERS_AVAILABLE = False
+
 import pickle
 import os
 import sys
@@ -172,14 +178,33 @@ class VectorRetriever:
             List of relevant chunks with similarity scores
         """
         try:
-            if not self.chunks or self.embeddings is None:
-                print("No chunks or embeddings available. Please load data and generate embeddings first.")
+            if not self.chunks:
+                print("No chunks available.")
                 return []
 
-            self.load_model()
-            query_embedding = self.model.encode([query])
+            similarities = None
+            try:
+                if self.embeddings is not None:
+                    self.load_model()
+                    if self.model is not None:
+                        query_embedding = self.model.encode([query])
+                        similarities = cosine_similarity(query_embedding, self.embeddings)[0]
+            except Exception as load_err:
+                print(f"Notice: Vector model encoding unavailable ({load_err}). Using keyword similarity fallback.")
+                similarities = None
 
-            similarities = cosine_similarity(query_embedding, self.embeddings)[0]
+            # If vector similarity failed, use keyword overlap similarity as robust fallback
+            if similarities is None:
+                query_words = set(query.lower().split())
+                similarities = []
+                for chunk in self.chunks:
+                    text_words = set(chunk.get('text', '').lower().split())
+                    if not query_words or not text_words:
+                        sim = 0.0
+                    else:
+                        overlap = query_words.intersection(text_words)
+                        sim = len(overlap) / len(query_words)
+                    similarities.append(sim)
 
             # Create list of (index, similarity, chunk) tuples, applying category filter early
             candidate_results = []
@@ -218,8 +243,6 @@ class VectorRetriever:
         
         except Exception as e:
             print(f"Error in retrieve method: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
             return []
 
     def hybrid_retrieve(self, query: str, top_k: int = 5,
