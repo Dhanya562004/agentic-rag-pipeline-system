@@ -79,7 +79,6 @@ st.markdown("""
 # ------------------------------------
 # 2. INITIALIZE SERVICES & STATE
 # ------------------------------------
-@st.cache_resource
 def get_llm_service():
     return LLMService()
 

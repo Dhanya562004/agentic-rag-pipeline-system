@@ -15,6 +15,25 @@ class LLMService:
             pass
         return None
 
+    def _extract_text(self, response) -> str | None:
+        if not response:
+            return None
+        try:
+            if hasattr(response, "text") and response.text:
+                return response.text.strip()
+        except Exception:
+            pass
+        try:
+            if hasattr(response, "candidates") and response.candidates:
+                for cand in response.candidates:
+                    if hasattr(cand, "content") and hasattr(cand.content, "parts"):
+                        parts = [p.text for p in cand.content.parts if hasattr(p, "text") and p.text]
+                        if parts:
+                            return "".join(parts).strip()
+        except Exception:
+            pass
+        return None
+
     def generate_response(self, prompt: str = "", context: str | None = None, **kwargs) -> str:
         if not prompt and "query" in kwargs:
             prompt = kwargs["query"]
@@ -32,7 +51,7 @@ class LLMService:
         else:
             full_prompt = prompt
 
-        last_error = ""
+        errors = []
 
         # 1. Primary: Try modern google-genai SDK
         try:
@@ -46,16 +65,18 @@ class LLMService:
                         model=m,
                         contents=full_prompt,
                     )
-                    if response and hasattr(response, "text") and response.text:
-                        return response.text.strip()
+                    text = self._extract_text(response)
+                    if text:
+                        return text
                 except Exception as inner_e:
-                    last_error = str(inner_e)
-                    err_text = last_error.lower()
+                    err_msg = str(inner_e)
+                    errors.append(f"genai({m}): {err_msg}")
+                    err_text = err_msg.lower()
                     if "404" in err_text or "not found" in err_text:
                         continue
                     break
         except Exception as e1:
-            last_error = str(e1)
+            errors.append(f"genai_init: {str(e1)}")
 
         # 2. Backup: Try legacy google-generativeai SDK
         try:
@@ -67,16 +88,17 @@ class LLMService:
                 try:
                     model = legacy_genai.GenerativeModel(m)
                     res = model.generate_content(full_prompt)
-                    if res and hasattr(res, "text") and res.text:
-                        return res.text.strip()
+                    text = self._extract_text(res)
+                    if text:
+                        return text
                 except Exception as inner_e:
-                    last_error = str(inner_e)
+                    errors.append(f"legacy({m}): {str(inner_e)}")
                     continue
         except Exception as e2:
-            last_error = str(e2)
+            errors.append(f"legacy_init: {str(e2)}")
 
-        if last_error:
-            return f"AI service error: {last_error}"
+        if errors:
+            return f"AI service error: {errors[-1]}"
 
         return "AI service temporarily unavailable"
 
