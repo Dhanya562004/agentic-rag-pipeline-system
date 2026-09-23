@@ -53,7 +53,7 @@ retriever.generate_embeddings()
 
 # Initialize LLM service
 try:
-    llm_service = LLMService(provider="together")  # You can change to "openai"
+    llm_service = LLMService(provider="gemini")
     print("LLM service initialized successfully!")
 except Exception as e:
     print(f"Warning: Could not initialize LLM service: {e}")

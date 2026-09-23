@@ -61,7 +61,7 @@ def load_pipeline_services():
     retriever.generate_embeddings()
     
     # Initialize LLM Service (handles missing keys gracefully with fallback)
-    llm_service = LLMService(provider="together")
+    llm_service = LLMService(provider="gemini")
         
     return retriever, llm_service
 

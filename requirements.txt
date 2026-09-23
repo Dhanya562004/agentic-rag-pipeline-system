@@ -4,9 +4,10 @@ numpy
 pandas
 python-dotenv
 requests
-together
+google-generativeai
 openai
 scikit-learn
 pydantic
 beautifulsoup4
+
 

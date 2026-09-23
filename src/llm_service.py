@@ -1,18 +1,21 @@
 """
 LLM Service for RAG Pipeline
-Handles text generation using Together AI or OpenAI
+Handles text generation using Google Gemini API or OpenAI with graceful fallback safety.
 """
 
 import os
 import traceback
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 try:
-    import together
-    TOGETHER_AVAILABLE = True
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
 except ImportError:
-    TOGETHER_AVAILABLE = False
+    GEMINI_AVAILABLE = False
 
 try:
     from openai import OpenAI
@@ -22,36 +25,37 @@ except ImportError:
 
 load_dotenv()
 
+
 class LLMService:
     """
-    Service for handling LLM interactions (Together AI, OpenAI, or Fallback Knowledge Engine)
+    Service for handling LLM interactions (Google Gemini API, OpenAI, or Fallback Knowledge Engine)
     """
-    
-    def __init__(self, provider: str = "together"):
+
+    def __init__(self, provider: str = "gemini"):
         """
         Initialize LLM service with graceful fallback if API key is not configured.
         """
-        self.provider = provider
+        self.provider = provider.lower()
         self.api_key = None
         self.client = None
-        self.model = None
+        self.model = "gemini-pro"
         self.is_configured = False
-        
-        if provider == "together":
-            self.api_key = os.getenv("TOGETHER_API_KEY")
-            if TOGETHER_AVAILABLE and self.api_key:
+
+        if self.provider == "gemini":
+            self.api_key = self._get_api_key("GOOGLE_API_KEY")
+            if GEMINI_AVAILABLE and self.api_key:
                 try:
-                    self.client = together.Together(api_key=self.api_key)
-                    self.model = "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo"
+                    genai.configure(api_key=self.api_key)
+                    self.client = genai.GenerativeModel(self.model)
                     self.is_configured = True
                 except Exception as e:
-                    print(f"Warning: Together AI client init failed: {e}")
+                    print(f"Warning: Gemini API client init failed: {e}")
             else:
-                print("Notice: TOGETHER_API_KEY not found or package missing. Using Fallback LLM Mode.")
-                self.model = "llama-3.1-8b-instruct (fallback engine)"
-                
-        elif provider == "openai":
-            self.api_key = os.getenv("OPENAI_API_KEY")
+                print("Notice: GOOGLE_API_KEY not found or package missing. Using Fallback LLM Mode.")
+                self.model = "gemini-pro (fallback engine)"
+
+        elif self.provider == "openai":
+            self.api_key = self._get_api_key("OPENAI_API_KEY")
             if OPENAI_AVAILABLE and self.api_key:
                 try:
                     self.client = OpenAI(api_key=self.api_key)
@@ -65,6 +69,59 @@ class LLMService:
         else:
             self.model = "general-llm (fallback engine)"
 
+    def _get_api_key(self, key_name: str) -> Optional[str]:
+        """
+        Retrieve API key from environment variable or Streamlit secrets safely.
+        """
+        key = os.getenv(key_name)
+        if key:
+            return key
+
+        try:
+            import streamlit as st
+            if hasattr(st, "secrets") and key_name in st.secrets:
+                return st.secrets[key_name]
+        except Exception:
+            pass
+
+        return None
+
+    def generate(self, prompt: str) -> str:
+        """
+        Generate response directly from prompt using the configured LLM provider.
+        Returns response text or safe fallback response if API key is missing or API fails.
+        """
+        if not self.is_configured or not self.client:
+            return "LLM unavailable, returning fallback response."
+
+        try:
+            if self.provider == "gemini":
+                response = self.client.generate_content(prompt)
+                if response and hasattr(response, "text") and response.text:
+                    return response.text.strip()
+                return "LLM unavailable, returning fallback response."
+
+            elif self.provider == "openai":
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=[
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.3
+                )
+                if response and response.choices:
+                    return response.choices[0].message.content.strip()
+                return "LLM unavailable, returning fallback response."
+
+            else:
+                return "LLM unavailable, returning fallback response."
+
+        except Exception as e:
+            print(f"Error in LLM generation ({self.provider}): {str(e)}")
+            print(traceback.format_exc())
+            return "LLM unavailable, returning fallback response."
+
     def generate_response(self, query: str, context: str, max_tokens: int = 1000) -> str:
         """
         Generate a response using the LLM or Fallback Knowledge Engine
@@ -72,14 +129,9 @@ class LLMService:
         try:
             if self.is_configured and self.client:
                 prompt = self._create_prompt(query, context)
-                if self.provider == "together":
-                    res = self._generate_together(prompt, max_tokens)
-                    if res and not res.startswith("Error"):
-                        return res
-                elif self.provider == "openai":
-                    res = self._generate_openai(prompt, max_tokens)
-                    if res and not res.startswith("Error"):
-                        return res
+                res = self.generate(prompt)
+                if res and not res.startswith("LLM unavailable"):
+                    return res
 
             # Fallback response generation if API is unconfigured or failed
             return self._fallback_knowledge_engine(query=query, context=context)
@@ -87,17 +139,9 @@ class LLMService:
             print(f"Error in generate_response: {str(e)}")
             return self._fallback_knowledge_engine(query=query, context=context)
 
-    
     def _create_prompt(self, query: str, context: str) -> str:
         """
         Create a prompt for the LLM
-        
-        Args:
-            query: User query
-            context: Retrieved context
-            
-        Returns:
-            Formatted prompt
         """
         prompt = f"""You are a direct and concise assistant that answers questions about France based on the provided context.
 
@@ -116,89 +160,8 @@ Instructions:
 7. Start your answer immediately with the relevant facts
 
 Answer:"""
-        
         return prompt
-    
-    def _generate_together(self, prompt: str, max_tokens: int) -> str:
-        """
-        Generate response using Together AI
-        
-        Args:
-            prompt: Input prompt
-            max_tokens: Maximum tokens to generate
-            
-        Returns:
-            Generated response
-        """
-        try:
-            response = self.client.completions.create(
-                model=self.model,
-                prompt=prompt,
-                max_tokens=max_tokens,
-                temperature=0.3,
-                top_p=0.5,
-                frequency_penalty=1.0,
-                presence_penalty=0.8,
-                stop=[
-                    "Question:", "Context:", "\n\nQuestion:", "\n\nContext:", 
-                    "Best regards", "Have a great day", "Is there anything else", 
-                    "Please let me know", "Note:", "Hope this helps", "Thank you", 
-                    "I hope this", "Let me know", "In conclusion", "To summarize",
-                    "In summary", "Feel free", "As requested", "As mentioned",
-                    "\n\n", "\nQuestion:"
-                ]
-            )
-            
-            if response and response.choices:
-                # Remove any trailing pleasantries or common closing phrases
-                text = response.choices[0].text.strip()
-                # Remove common closers that might have slipped through
-                closers = ["Hope this helps", "Thank you", "I hope this", "Let me know", "In conclusion"]
-                for closer in closers:
-                    if text.endswith(closer):
-                        text = text[:-(len(closer))].strip()
-                return text
-            else:
-                return "Error: Invalid response format from Together AI"
-        except Exception as e:
-            print(f"Error calling Together AI: {str(e)}")
-            print(traceback.format_exc())
-            return f"Error calling Together AI: {str(e)}"
-    
-    def _generate_openai(self, prompt: str, max_tokens: int) -> str:
-        """
-        Generate response using OpenAI
-        
-        Args:
-            prompt: Input prompt
-            max_tokens: Maximum tokens to generate
-            
-        Returns:
-            Generated response
-        """
-        try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a direct and concise assistant that answers questions about France based on provided context. Answer in under 200 words, with no introductions or conclusions. Never repeat yourself and avoid any pleasantries or unnecessary remarks."},
-                    {"role": "user", "content": prompt}
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3,
-                top_p=0.5,
-                presence_penalty=0.8,
-                frequency_penalty=1.0
-            )
-            
-            if response and response.choices:
-                return response.choices[0].message.content.strip()
-            else:
-                return "Error: Invalid response format from OpenAI"
-        except Exception as e:
-            print(f"Error calling OpenAI: {str(e)}")
-            print(traceback.format_exc())
-            return f"Error calling OpenAI: {str(e)}"
-    
+
     def generate_general_response(self, query: str, max_tokens: int = 500) -> str:
         """
         Generate a general LLM response for queries that do not require RAG context.
@@ -206,14 +169,9 @@ Answer:"""
         try:
             if self.is_configured and self.client:
                 prompt = f"Answer the following question directly, concisely, and accurately:\n\nQuestion: {query}\n\nAnswer:"
-                if self.provider == "together":
-                    res = self._generate_together(prompt, max_tokens)
-                    if res and not res.startswith("Error"):
-                        return res
-                elif self.provider == "openai":
-                    res = self._generate_openai(prompt, max_tokens)
-                    if res and not res.startswith("Error"):
-                        return res
+                res = self.generate(prompt)
+                if res and not res.startswith("LLM unavailable"):
+                    return res
 
             return self._fallback_knowledge_engine(query=query, context="")
         except Exception as e:
@@ -227,7 +185,7 @@ Answer:"""
         """
         query_clean = query.strip()
         query_lower = query_clean.lower()
-        
+
         # If context is available, extract relevant information directly
         if context and len(context.strip()) > 0:
             lines = [line.strip() for line in context.split('\n') if line.strip() and not line.startswith('[Source')]
@@ -259,5 +217,3 @@ Answer:"""
             "model": self.model,
             "api_key_configured": self.is_configured
         }
-
-
