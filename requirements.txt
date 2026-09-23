@@ -1,9 +1,5 @@
 streamlit
 sentence-transformers
 numpy
-pandas
-python-dotenv
-requests
-google-generativeai
 pypdf
-scikit-learn
+google-generativeai

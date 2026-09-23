@@ -28,7 +28,7 @@ def split_into_chunks(text: str, chunk_size: int = 125, overlap: int = 20) -> li
     return chunks
 
 def extract_text_from_file(uploaded_file) -> str:
-    """Extract raw text from uploaded PDF or TXT file."""
+    """Extract raw text from uploaded PDF or TXT file safely handling encodings."""
     if uploaded_file is None:
         return ""
     try:
@@ -43,7 +43,10 @@ def extract_text_from_file(uploaded_file) -> str:
             return "\n".join(extracted_pages)
         elif filename.endswith(".txt"):
             content = uploaded_file.getvalue()
-            return content.decode("utf-8", errors="ignore")
+            try:
+                return content.decode("utf-8")
+            except UnicodeDecodeError:
+                return content.decode("latin-1", errors="ignore")
         else:
             return ""
     except Exception:
@@ -83,7 +86,7 @@ class VectorRetriever:
         return len(self.chunks)
 
     def search(self, query: str, top_k: int = 3) -> tuple[list[dict], float]:
-        """Perform cosine similarity search and return top k chunks with similarity scores."""
+        """Perform cosine similarity search and return (retrieved_chunks, max_score)."""
         if not self.chunks or self.embeddings is None or len(self.embeddings) == 0:
             return [], 0.0
 

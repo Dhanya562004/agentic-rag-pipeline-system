@@ -1,66 +1,48 @@
-import os
 import streamlit as st
 import google.generativeai as genai
 
-
 class LLMService:
-    def __init__(self):
-        self.model = None
-        api_key = self._get_api_key()
+    def __init__(self, model_name: str = "gemini-1.5-flash-latest"):
+        self.model_name = model_name
 
-        print("🔑 API KEY FOUND:", bool(api_key))
-
-        if api_key:
-            try:
-                genai.configure(api_key=api_key)
-
-                # ✅ ONLY WORKING MODEL FOR THIS SDK
-                self.model = genai.GenerativeModel("gemini-pro")
-
-                print("✅ Gemini initialized successfully")
-
-            except Exception as e:
-                print("❌ Gemini init error:", str(e))
-        else:
-            print("❌ No API key found")
-
-    # -------------------------
-    def _get_api_key(self):
+    def _get_api_key(self) -> str | None:
         try:
             if "GOOGLE_API_KEY" in st.secrets:
-                return st.secrets["GOOGLE_API_KEY"]
-        except:
+                key = st.secrets["GOOGLE_API_KEY"]
+                if key and str(key).strip():
+                    return str(key).strip()
+        except Exception:
             pass
+        return None
 
-        return os.getenv("GOOGLE_API_KEY")
+    def generate_response(self, prompt: str = "", context: str | None = None, **kwargs) -> str:
+        if not prompt and "query" in kwargs:
+            prompt = kwargs["query"]
 
-    # -------------------------
-    def generate_response(self, prompt, context=None):
-
-        if not self.model:
-            return "❌ API key not configured"
+        api_key = self._get_api_key()
+        if not api_key:
+            return "API key not configured"
 
         try:
-            if context:
-                full_prompt = f"""
-Answer ONLY using the context.
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(self.model_name)
 
-Context:
-{context}
-
-Question:
-{prompt}
-"""
+            if context and context.strip():
+                full_prompt = (
+                    f"You are a helpful AI assistant. Use the following context to answer the user's question accurately.\n\n"
+                    f"--- CONTEXT ---\n{context}\n---------------\n\n"
+                    f"Question: {prompt}\n\nAnswer:"
+                )
             else:
                 full_prompt = prompt
 
-            response = self.model.generate_content(full_prompt)
+            response = model.generate_content(full_prompt)
+            if response and hasattr(response, "text") and response.text:
+                return response.text.strip()
+            else:
+                return "AI service temporarily unavailable"
+        except Exception:
+            return "AI service temporarily unavailable"
 
-            if response and hasattr(response, "text"):
-                return response.text
-
-            return "⚠️ Empty response"
-
-        except Exception as e:
-            print("❌ Gemini error:", str(e))
-            return f"❌ Gemini Error: {str(e)}"
+    def generate_general_response(self, prompt: str) -> str:
+        return self.generate_response(prompt=prompt, context=None)
