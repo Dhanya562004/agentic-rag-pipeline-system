@@ -185,7 +185,7 @@ class LLMService:
         """
         try:
             if self.is_configured and self.client:
-                prompt = self._create_prompt(query, context)
+                prompt = self._create_rag_prompt(query, context)
                 res = self.generate(prompt)
                 if res and not res.startswith("LLM unavailable"):
                     return self._clean_output(res)
@@ -195,11 +195,11 @@ class LLMService:
             print(f"Error in generate_response: {str(e)}")
             return self._fallback_knowledge_engine(query=query, context=context)
 
-    def _create_prompt(self, query: str, context: str) -> str:
+    def _create_rag_prompt(self, query: str, context: str) -> str:
         """
-        Create a strict question-answering prompt for the LLM
+        Create a strict question-answering prompt for RAG mode
         """
-        prompt = f"""You are a strict question-answering system.
+        return f"""You are a strict question-answering system.
 
 Context:
 {context}
@@ -209,13 +209,23 @@ Question:
 
 Rules:
 - Answer ONLY using the context
-- Give a short, direct answer (1–2 sentences max)
-- DO NOT repeat the context
-- DO NOT include extra explanation
-- If answer is not found, say: "Not found in context"
+- Keep answer short (1–2 sentences)
+- DO NOT repeat context
+- If not found, say: "Not found in context"
 
 Answer:"""
-        return prompt
+
+    def _create_fallback_prompt(self, query: str) -> str:
+        """
+        Create a natural, helpful prompt for Fallback General LLM mode
+        """
+        return f"""You are a helpful AI assistant.
+
+Answer the user's question clearly and naturally.
+Keep it concise and accurate.
+Do NOT mention context or documents.
+
+Answer:"""
 
     def generate_general_response(self, query: str, max_tokens: int = 200) -> str:
         """
@@ -223,7 +233,7 @@ Answer:"""
         """
         try:
             if self.is_configured and self.client:
-                prompt = f"Answer the following question directly, concisely, and accurately in 1-2 sentences:\n\nQuestion: {query}\n\nAnswer:"
+                prompt = self._create_fallback_prompt(query)
                 res = self.generate(prompt)
                 if res and not res.startswith("LLM unavailable"):
                     return self._clean_output(res)

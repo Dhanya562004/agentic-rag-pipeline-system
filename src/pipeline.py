@@ -142,6 +142,7 @@ def run_pipeline(query: str, retriever=None, llm_service=None) -> dict:
         confidence = "Medium"
         score = 0.50
 
+    print("Final Mode Decision:", mode)
     print("FINAL ANSWER:", answer)
     elapsed_time = time.time() - start_time
     log_execution(

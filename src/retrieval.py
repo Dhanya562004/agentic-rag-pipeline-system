@@ -287,6 +287,7 @@ class VectorRetriever:
             if top_results:
                 top_c = top_results[0]
                 print("TOP CHUNK:", top_c['text'][:200])
+                print("Similarity Score:", top_c['similarity_score'])
 
             return top_results
 
@@ -333,6 +334,7 @@ class VectorRetriever:
             if top_clean:
                 top_c = top_clean[0]
                 print("TOP CHUNK:", top_c['text'][:200])
+                print("Similarity Score:", top_c.get('similarity_score', 0.0))
 
             return top_clean
 
