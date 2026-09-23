@@ -53,13 +53,27 @@ class LLMService:
 
         errors = []
 
-        # 1. Primary: Try modern google-genai SDK
+        # 1. Primary: Try modern google-genai SDK with dynamic model discovery
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
-            models_to_try = [self.model_name, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"]
             
-            for m in models_to_try:
+            available_models = []
+            try:
+                for m in client.models.list():
+                    name = getattr(m, "name", "") or str(m)
+                    clean_name = name.replace("models/", "")
+                    if "gemini" in clean_name and "embed" not in clean_name and "imagen" not in clean_name:
+                        available_models.append(clean_name)
+            except Exception as list_err:
+                errors.append(f"genai_list: {str(list_err)}")
+
+            candidates = [self.model_name, "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-pro"]
+            for m in available_models:
+                if m not in candidates:
+                    candidates.append(m)
+
+            for m in candidates:
                 try:
                     response = client.models.generate_content(
                         model=m,
@@ -74,17 +88,33 @@ class LLMService:
                     err_text = err_msg.lower()
                     if "404" in err_text or "not found" in err_text:
                         continue
+                    if "api_key" in err_text or "unauthenticated" in err_text or "invalid" in err_text or "blocked" in err_text:
+                        return f"API Key Error: {err_msg}"
                     break
         except Exception as e1:
             errors.append(f"genai_init: {str(e1)}")
 
-        # 2. Backup: Try legacy google-generativeai SDK
+        # 2. Backup: Try legacy google-generativeai SDK with dynamic model discovery
         try:
             import google.generativeai as legacy_genai
             legacy_genai.configure(api_key=api_key)
-            legacy_models = [self.model_name, "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-pro"]
             
-            for m in legacy_models:
+            legacy_available = []
+            try:
+                for m in legacy_genai.list_models():
+                    if hasattr(m, "supported_generation_methods") and "generateContent" in m.supported_generation_methods:
+                        c_name = m.name.replace("models/", "")
+                        if "embed" not in c_name and "imagen" not in c_name and "pro-001" not in c_name:
+                            legacy_available.append(c_name)
+            except Exception as legacy_list_err:
+                errors.append(f"legacy_list: {str(legacy_list_err)}")
+
+            candidates_legacy = [self.model_name, "gemini-1.5-flash", "gemini-1.5-flash-latest"]
+            for m in legacy_available:
+                if m not in candidates_legacy:
+                    candidates_legacy.append(m)
+
+            for m in candidates_legacy:
                 try:
                     model = legacy_genai.GenerativeModel(m)
                     res = model.generate_content(full_prompt)
@@ -98,6 +128,9 @@ class LLMService:
             errors.append(f"legacy_init: {str(e2)}")
 
         if errors:
+            for err in reversed(errors):
+                if "api_key" in err.lower() or "invalid" in err.lower() or "unauthenticated" in err.lower():
+                    return f"API Key Error: {err}"
             return f"AI service error: {errors[-1]}"
 
         return "AI service temporarily unavailable"
