@@ -29,7 +29,7 @@ def rag_pipeline(query: str, retriever=None, llm_service=None) -> dict:
         if retrieved_chunks:
             top_score = max([chunk.get("similarity_score", 0.0) for chunk in retrieved_chunks])
             top_chunk_text = retrieved_chunks[0].get("text", "")
-            print(f"DEBUG PIPELINE: Top retrieved chunk (Sim Score: {top_score:.3f}): '{top_chunk_text[:150]}...'")
+            print("TOP CHUNK:", top_chunk_text[:200])
 
             if top_score >= 0.75:
                 context_parts = [chunk.get("text", "") for chunk in retrieved_chunks if chunk.get("text")]
@@ -142,6 +142,7 @@ def run_pipeline(query: str, retriever=None, llm_service=None) -> dict:
         confidence = "Medium"
         score = 0.50
 
+    print("FINAL ANSWER:", answer)
     elapsed_time = time.time() - start_time
     log_execution(
         query=query_str,

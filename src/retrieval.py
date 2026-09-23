@@ -286,7 +286,7 @@ class VectorRetriever:
             # Debug log top chunk for verification
             if top_results:
                 top_c = top_results[0]
-                print(f"DEBUG RETRIEVAL: Top Chunk (Rank 1, Sim Score: {top_c['similarity_score']:.3f}): '{top_c['text'][:120]}...'")
+                print("TOP CHUNK:", top_c['text'][:200])
 
             return top_results
 
@@ -332,7 +332,7 @@ class VectorRetriever:
 
             if top_clean:
                 top_c = top_clean[0]
-                print(f"DEBUG HYBRID RETRIEVAL: Top Chunk (Rank 1, Sim Score: {top_c.get('similarity_score', 0.0):.3f}): '{top_c['text'][:120]}...'")
+                print("TOP CHUNK:", top_c['text'][:200])
 
             return top_clean
 

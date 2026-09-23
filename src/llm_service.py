@@ -89,6 +89,7 @@ class LLMService:
     def _clean_output(self, text: str) -> str:
         """
         Clean generated text to remove unwanted prefixes, quotes, and markdown formatting.
+        Ensure response is concise (1-2 sentences max) without extraneous context dumps.
         """
         if not text:
             return ""
@@ -106,8 +107,12 @@ class LLMService:
             "Based on document context,",
             "Based on document context",
             "According to the context:",
+            "According to the context,",
+            "According to the context",
             "According to the text:",
+            "According to the text,",
             "According to the document:",
+            "According to the document,",
             "Answer:",
             "Response:",
             "Retrieved Context:"
@@ -125,6 +130,16 @@ class LLMService:
         # Remove surrounding quotation marks
         if (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
             cleaned = cleaned[1:-1].strip()
+
+        # Truncate if LLM outputs extra long paragraphs despite rules
+        paragraphs = [p.strip() for p in cleaned.split('\n\n') if p.strip()]
+        if paragraphs:
+            cleaned = paragraphs[0]
+
+        # Limit to first 2 sentences if response is too long
+        sentences = re.split(r'(?<=[.!?])\s+', cleaned)
+        if len(sentences) > 2:
+            cleaned = " ".join(sentences[:2]).strip()
 
         return cleaned
 
