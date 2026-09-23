@@ -1,7 +1,6 @@
 """
 Evaluation Layer Module
-Evaluates confidence score and relevance for responses.
-Calculates confidence based on retrieval similarity score (< 0.5 threshold) and answer metrics.
+Evaluates confidence score and relevance for responses based on similarity threshold (0.75).
 """
 
 def confidence_evaluator(
@@ -13,7 +12,7 @@ def confidence_evaluator(
 ) -> dict:
     """
     Evaluates response quality and assigns confidence score (High / Medium / Low)
-    along with a numerical confidence rating (0.0 to 1.0).
+    along with a numerical confidence rating (0.0 to 1.0) using 0.75 threshold.
     
     Args:
         query: User prompt
@@ -25,29 +24,28 @@ def confidence_evaluator(
     Returns:
         dict: {"confidence": "High"|"Medium"|"Low", "score": float}
     """
-    # Guard clause for empty or invalid answers
     if not answer or not str(answer).strip() or "Error" in str(answer):
         return {
             "confidence": "Low",
             "score": 0.0
         }
         
-    invalid_phrases = ["no relevant document found", "i don't have information", "no context found"]
+    invalid_phrases = ["no relevant document found", "i don't have information", "no context found", "not found in context"]
     if any(phrase in str(answer).lower() for phrase in invalid_phrases):
         return {
             "confidence": "Low",
             "score": round(top_score, 2)
         }
 
-    # Evaluate based on mode and top similarity score
+    # Evaluate based on mode and top similarity score (0.75 threshold)
     if "rag" in mode.lower() and "fallback" not in mode.lower():
         num_chunks = len(retrieved_chunks) if retrieved_chunks else 0
         
-        # Threshold rule: < 0.5 or 0 chunks triggers LOW confidence
-        if num_chunks == 0 or top_score < 0.5:
+        # Strict threshold rule: < 0.75 or 0 chunks triggers LOW confidence
+        if num_chunks == 0 or top_score < 0.75:
             confidence = "Low"
             score = round(top_score, 2)
-        elif top_score >= 0.7:
+        elif top_score >= 0.85:
             confidence = "High"
             score = round(top_score, 2)
         else:
@@ -56,10 +54,10 @@ def confidence_evaluator(
     else:
         # General LLM or Fallback mode evaluation
         word_count = len(str(answer).split())
-        if word_count >= 15:
+        if word_count >= 10:
             confidence = "High"
             score = 0.85
-        elif word_count >= 5:
+        elif word_count >= 4:
             confidence = "Medium"
             score = 0.65
         else:
@@ -82,4 +80,3 @@ def evaluate_response(query: str, answer: str, mode: str, retrieved_chunks: list
         retrieved_chunks=retrieved_chunks, 
         top_score=top_score
     )
-

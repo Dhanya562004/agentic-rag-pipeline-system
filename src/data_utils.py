@@ -180,7 +180,7 @@ class DataProcessor:
     
     def clean_text(self, text: str) -> str:
         """
-        Clean and normalize text
+        Clean and normalize text by removing UI noise, quiz text, duplicate lines, and uninformative elements.
         
         Args:
             text: Raw text to clean
@@ -191,74 +191,66 @@ class DataProcessor:
         if not text:
             return ""
         
+        noise_keywords = [
+            "Quiz", "Feedback", "Print", "Ask the Chatbot", "Related Questions",
+            "External Websites", "Table Of Contents", "Table of Contents", "Cite",
+            "Citation", "Share", "Subscribe", "Encyclopaedia Britannica", "Written by",
+            "Fact-checked by", "Copyright", "All rights reserved", "Article History",
+            "Select a type", "Submit Feedback", "Which Country Is Larger", "Photo Gallery",
+            "Children's Encyclopedia", "Student Encyclopedia", "Facts & Stats", "Images, Videos & Interactives"
+        ]
+
         # Fix encoding issues - normalize unicode characters
         text = unicodedata.normalize('NFKD', text)
         
-        # Remove or replace common HTML entities that might have been missed
+        # Split into lines and filter noisy / duplicate lines
+        lines = text.split('\n')
+        cleaned_lines = []
+        seen_lines = set()
+
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+
+            if any(kw.lower() in line_str.lower() for kw in noise_keywords):
+                continue
+
+            if len(line_str) < 5 and not line_str.endswith(('.', '!', '?')):
+                continue
+
+            line_key = line_str.lower()
+            if line_key in seen_lines:
+                continue
+            seen_lines.add(line_key)
+            cleaned_lines.append(line_str)
+
+        text = " ".join(cleaned_lines)
+
+        # Remove or replace common HTML entities
         html_entities = {
-            '&nbsp;': ' ',
-            '&amp;': '&',
-            '&lt;': '<',
-            '&gt;': '>',
-            '&quot;': '"',
-            '&#39;': "'",
-            '&apos;': "'",
-            '&rsquo;': "'",
-            '&lsquo;': "'",
-            '&rdquo;': '"',
-            '&ldquo;': '"',
-            '&mdash;': '—',
-            '&ndash;': '–'
+            '&nbsp;': ' ', '&amp;': '&', '&lt;': '<', '&gt;': '>',
+            '&quot;': '"', '&#39;': "'", '&apos;': "'", '&rsquo;': "'",
+            '&lsquo;': "'", '&rdquo;': '"', '&ldquo;': '"', '&mdash;': '—', '&ndash;': '–'
         }
-        
         for entity, replacement in html_entities.items():
             text = text.replace(entity, replacement)
-        
-        # Remove extra whitespace and normalize newlines
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\n+', ' ', text)
-        text = re.sub(r'\r+', ' ', text)
-        text = re.sub(r'\t+', ' ', text)
-        # Remove or replace problematic characters - fix quote normalization
-        # Handle different types of quotes individually to avoid regex parsing issues
-        text = text.replace('"', '"')  # Left double quotation mark
-        text = text.replace('"', '"')  # Right double quotation mark
-        text = text.replace(''', "'")  # Left single quotation mark
-        text = text.replace(''', "'")  # Right single quotation mark
-        text = text.replace('„', '"')  # Double low-9 quotation mark
-        text = text.replace('‚', "'")  # Single low-9 quotation mark
-        
-        text = re.sub(r'[–—]', '-', text)  # Normalize dashes
-        text = re.sub(r'[…]', '...', text)  # Replace ellipsis
-        
-        # Remove special characters but keep essential punctuation
+
+        text = text.replace('"', '"').replace('"', '"').replace(''', "'").replace(''', "'")
+        text = re.sub(r'[–—]', '-', text)
+        text = re.sub(r'[…]', '...', text)
         text = re.sub(r'[^\w\s\.\,\!\?\;\:\-\(\)\[\]\{\}\"\'\/\%\$\&\@\#]', '', text)
-        
-        # Fix multiple punctuation
         text = re.sub(r'\.{2,}', '.', text)
-        text = re.sub(r'\,{2,}', ',', text)
-        text = re.sub(r'\!{2,}', '!', text)
-        text = re.sub(r'\?{2,}', '?', text)
-        
-        # Remove URLs and email addresses (noise)
-        text = re.sub(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', '', text)
+        text = re.sub(r'http[s]?://\S+', '', text)
         text = re.sub(r'\S+@\S+\.\S+', '', text)
-        
-        # Remove standalone numbers that might be page numbers or references
-        text = re.sub(r'\b\d{4,}\b', '', text)  # Remove 4+ digit numbers (likely page refs)
-        
-        # Clean up citation patterns like [1], (2), etc.
         text = re.sub(r'\[\d+\]', '', text)
         text = re.sub(r'\(\d+\)', '', text)
-        
-        # Remove excessive spacing around punctuation
-        text = re.sub(r'\s+([,.!?;:])', r'\1', text)
-        text = re.sub(r'([,.!?;:])\s+', r'\1 ', text)
-        
-        # Strip leading/trailing whitespace and ensure single spaces
-        text = text.strip()
-        text = re.sub(r'\s+', ' ', text)
-        
+
+        for kw in noise_keywords:
+            pattern = re.compile(re.escape(kw) + r'[^.!?]*', re.IGNORECASE)
+            text = pattern.sub('', text)
+
+        text = re.sub(r'\s+', ' ', text).strip()
         return text
     
     def chunk_text(self, text: str, chunk_size: int = 400, overlap: int = 2, method: str = "semantic") -> List[str]:
@@ -462,14 +454,18 @@ class DataProcessor:
 
             # Add metadata to each chunk
             for chunk_idx, chunk in enumerate(chunks):
+                cleaned_chunk = self.clean_text(chunk)
+                if len(cleaned_chunk) < 50:
+                    continue
+
                 # Find which section this chunk belongs to
                 chunk_position = self._find_chunk_position_in_original(
-                    doc['content'], chunk, doc.get('sections', [])
+                    doc['content'], cleaned_chunk, doc.get('sections', [])
                 )
                 
                 processed_chunk = {
                     'chunk_id': f"doc_{doc_idx}_chunk_{chunk_idx}",
-                    'text': chunk,
+                    'text': cleaned_chunk,
                     'source_url': doc['url'],
                     'title': doc['title'],
                     'section': chunk_position['section'],  # NEW: Granular section
@@ -477,7 +473,7 @@ class DataProcessor:
                     'doc_index': doc_idx,
                     'chunk_index': chunk_idx,
                     'total_chunks': len(chunks),
-                    'word_count': len(chunk.split()),
+                    'word_count': len(cleaned_chunk.split()),
                     'date_retrieved': doc['scraped_at']  # Renamed for clarity
                 }
                 processed_chunks.append(processed_chunk)

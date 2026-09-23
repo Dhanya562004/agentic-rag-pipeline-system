@@ -17,7 +17,7 @@ def fix_embeddings():
     os.makedirs(data_dir, exist_ok=True)
     embeddings_file = os.path.join(data_dir, "embeddings.pkl")
     data_file = os.path.join(data_dir, "processed_data.json")
-    model_name = "togethercomputer/m2-bert-80M-8k-retrieval"
+    model_name = "all-MiniLM-L6-v2"
 
     print("Checking embeddings file...")
 
@@ -37,29 +37,32 @@ def fix_embeddings():
 
             # Verify the shape of embeddings
             if len(chunks) != embeddings.shape[0]:
-                print(f"⚠️ Embeddings shape mismatch: {embeddings.shape[0]} embeddings for {len(chunks)} chunks")
+                print(f"[Warning] Embeddings shape mismatch: {embeddings.shape[0]} embeddings for {len(chunks)} chunks")
                 needs_regeneration = True
             else:
-                print(f"✅ Embeddings file is valid: {embeddings.shape[0]} embeddings with dimension {embeddings.shape[1]}")
+                print(f"[OK] Embeddings file is valid: {embeddings.shape[0]} embeddings with dimension {embeddings.shape[1]}")
                 return True
         except Exception as e:
-            print(f"⚠️ Error loading embeddings file: {str(e)}")
+            print(f"[Warning] Error loading embeddings file: {str(e)}")
             needs_regeneration = True
     else:
-        print("⚠️ Embeddings file does not exist")
+        print("[Notice] Embeddings file does not exist")
         needs_regeneration = True
 
     # Regenerate embeddings if needed
     if needs_regeneration:
-        print("\n🔄 Regenerating embeddings...")
+        print("\n[Regenerating] Regenerating embeddings...")
         try:
             # Load the model
-            print(f"⏳ Loading embedding model: {model_name}")
-            model = SentenceTransformer(model_name, trust_remote_code=True)
-            print("✅ Model loaded successfully!")
+            print(f"[Loading] Loading embedding model: {model_name}")
+            try:
+                model = SentenceTransformer(model_name)
+            except Exception:
+                model = SentenceTransformer(model_name, trust_remote_code=True)
+            print("[OK] Model loaded successfully!")
 
             # Generate embeddings
-            print(f"⏳ Generating embeddings for {len(chunks)} chunks...")
+            print(f"[Processing] Generating embeddings for {len(chunks)} chunks...")
             texts = [chunk['text'] for chunk in chunks]
 
             batch_size = 32
@@ -78,22 +81,22 @@ def fix_embeddings():
             with open(embeddings_file, 'wb') as f:
                 pickle.dump(embeddings, f)
 
-            print(f"✅ Generated and saved embeddings with shape: {embeddings.shape} to {embeddings_file}")
+            print(f"[OK] Generated and saved embeddings with shape: {embeddings.shape} to {embeddings_file}")
             return True
         except Exception as e:
-            print(f"❌ Error regenerating embeddings: {str(e)}")
+            print(f"[Error] Error regenerating embeddings: {str(e)}")
             print(traceback.format_exc())
             return False
 
 def main():
     """Main entry point for the script"""
-    print("\n🔍 Checking and fixing embeddings file if needed...")
+    print("\n[Checking] Checking and fixing embeddings file if needed...")
     result = fix_embeddings()
     if result:
-        print("\n✅ Embeddings check/fix completed successfully!")
+        print("\n[OK] Embeddings check/fix completed successfully!")
         return 0
     else:
-        print("\n❌ Embeddings check/fix failed!")
+        print("\n[Error] Embeddings check/fix failed!")
         return 1
 
 if __name__ == "__main__":
