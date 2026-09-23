@@ -31,7 +31,9 @@ class LLMService:
         else:
             full_prompt = prompt
 
-        # 1. Primary: Try official google-genai SDK
+        last_error = ""
+
+        # 1. Primary: Try modern google-genai SDK
         try:
             from google import genai
             client = genai.Client(api_key=api_key)
@@ -46,18 +48,15 @@ class LLMService:
                     if response and hasattr(response, "text") and response.text:
                         return response.text.strip()
                 except Exception as inner_e:
-                    err_text = str(inner_e).lower()
+                    last_error = str(inner_e)
+                    err_text = last_error.lower()
                     if "404" in err_text or "not found" in err_text:
                         continue
-                    if "api_key" in err_text or "unauthenticated" in err_text or "blocked" in err_text:
-                        return "API key not configured or blocked"
-                    continue
+                    break
         except Exception as e1:
-            err_text = str(e1).lower()
-            if "api_key" in err_text or "unauthenticated" in err_text or "blocked" in err_text:
-                return "API key not configured or blocked"
+            last_error = str(e1)
 
-        # 2. Backup: Try legacy google-generativeai SDK
+        # 2. Fallback: Try legacy google-generativeai SDK
         try:
             import google.generativeai as legacy_genai
             legacy_genai.configure(api_key=api_key)
@@ -69,10 +68,14 @@ class LLMService:
                     res = model.generate_content(full_prompt)
                     if res and hasattr(res, "text") and res.text:
                         return res.text.strip()
-                except Exception:
+                except Exception as inner_e:
+                    last_error = str(inner_e)
                     continue
-        except Exception:
-            pass
+        except Exception as e2:
+            last_error = str(e2)
+
+        if last_error:
+            return f"AI service error: {last_error}"
 
         return "AI service temporarily unavailable"
 
